@@ -7,7 +7,7 @@ class Nhentai extends ComicSource {
     // unique id of the source
     key = "nhentai"
 
-    version = "1.0.8"
+    version = "1.0.9"
 
     minAppVersion = "1.0.0"
 
@@ -50,14 +50,14 @@ class Nhentai extends ComicSource {
      */
     parseComic(element) {
         let imgEl = element.querySelector("a > img");
-        let img = imgEl?.attributes?.["data-src"] || imgEl?.attributes?.["src"] || "";
-        let name = element.querySelector("div.caption")?.text || "";
+        let img = imgEl?.attributes?.["data-src"] ?? imgEl?.attributes?.["src"] ?? "";
+        let name = element.querySelector("div.caption")?.text ?? "";
         const regex = /\d+/g;
-        let href = element.querySelector("a")?.attributes?.["href"] || "";
+        let href = element.querySelector("a")?.attributes?.["href"] ?? "";
         let idMatch = href.match(regex);
         let id = idMatch ? idMatch.join('') : "";
         let lang = "Unknown";
-        let tags = element.attributes?.["class"];
+        let tags = element.attributes?.["class"] ?? "";
         if (tags.includes("lang-gb")) {
             lang = "English";
         } else if (tags.includes("lang-jp")) {
@@ -66,7 +66,7 @@ class Nhentai extends ComicSource {
             lang = "中文";
         }
         let tagsRes = [];
-        for (let tag of tags.split(" ")) {
+        for (let tag of (tags?.split(" ") ?? [])) {
             if (Nhentai.nhentaiTags[tag] != null) {
                 tagsRes.push(Nhentai.nhentaiTags[tag]);
             }
@@ -122,7 +122,7 @@ class Nhentai extends ComicSource {
 
     toAbsoluteMediaUrl(path, isThumb = false) {
         if (!path) {
-            return path
+            return ""
         }
         if (path.startsWith("http")) {
             return path
@@ -158,12 +158,12 @@ class Nhentai extends ComicSource {
             }
         }
         return new Comic({
-            id: String(item.id),
-            title: item.english_title || item.japanese_title || String(item.id),
+            id: String(item.id ?? ""),
+            title: (item.english_title ?? "") || (item.japanese_title ?? "") || String(item.id ?? ""),
             subtitle: "",
-            cover: this.toAbsoluteMediaUrl(item.thumbnail, true),
+            cover: this.toAbsoluteMediaUrl(item.thumbnail ?? "", true),
             tags: tagsRes,
-            description: String(item.id),
+            description: String(item.id ?? ""),
             language: lang
         })
     }
@@ -530,22 +530,23 @@ class Nhentai extends ComicSource {
             if (apiRes.status === 200) {
                 let data = JSON.parse(apiRes.body)
 
-                let title = data?.title?.pretty || data?.title?.english || String(id)
-                let englishTitle = data?.title?.english || ""
+                let title = (data?.title?.pretty ?? "") || (data?.title?.english ?? "") || String(id ?? "")
+                let englishTitle = data?.title?.english ?? ""
                 let subtitle = englishTitle && englishTitle !== title ? englishTitle : ""
-                let cover = this.toAbsoluteMediaUrl(data?.cover?.path || data?.thumbnail?.path || "", true)
+                let coverPath = (data?.cover?.path ?? "") || (data?.thumbnail?.path ?? "")
+                let cover = this.toAbsoluteMediaUrl(coverPath, true)
                 
                 let tags = new Map();
                 for (let tag of (data.tags || [])) {
-                    let namespace = this.tagNamespace(tag.type)
+                    let namespace = this.tagNamespace(tag.type ?? "")
                     if (!tags.has(namespace)) {
                         tags.set(namespace, [])
                     }
-                    tags.get(namespace).push(tag.name)
+                    tags.get(namespace).push(tag.name ?? "")
                 }
 
                 let thumbnails = (data.pages || [])
-                    .map(p => this.toAbsoluteMediaUrl(p.thumbnail, true))
+                    .map(p => this.toAbsoluteMediaUrl(p?.thumbnail ?? "", true))
                     .filter(Boolean)
                 if (thumbnails.length === 0) {
                     let pagesRes = await Network.get(`${this.apiBaseUrl}/galleries/${id}`, {})
@@ -560,8 +561,8 @@ class Nhentai extends ComicSource {
                 let related = (data.related || []).map(e => this.parseComicFromApi(e))
 
                 let comic = new ComicDetails({
-                    id: String(id),
-                    title: title || String(id),
+                    id: String(id ?? ""),
+                    title: title || String(id ?? ""),
                     subtitle: subtitle || "",
                     cover: cover || "",
                     tags: tags,
@@ -657,45 +658,12 @@ class Nhentai extends ComicSource {
             let apiRes = await Network.get(`${this.apiBaseUrl}/galleries/${comicId}`, {})
             if (apiRes.status === 200) {
                 let apiData = JSON.parse(apiRes.body)
-                let images = (apiData.pages || []).map(p => this.toAbsoluteMediaUrl(p.path, false))
+                let images = (apiData.pages || []).map(p => this.toAbsoluteMediaUrl(p?.path ?? "", false))
                 if (images.length > 0) {
                     return { images: images }
                 }
             }
-            /*
-            let res = await Network.get(`${this.baseUrl}/g/${comicId}/1/`, {})
-            if(res.status !== 200) {
-                throw "Invalid Status Code: " + res.status
-            }
-            let document = new HtmlDocument(res.body)
-            let script = document.querySelectorAll("script").find((e) => {
-                return e.text.includes("media_id")
-            }).text
-            let json = script.split('body":"')[1].split('"}<')[0]
-            let decodedJsonText =
-                json.replaceAll("\\u0022", "\"").replaceAll("\\u005C", "\\");
-            let data = JSON.parse(decodedJsonText)
-            let mediaId = data.media_id
-            let images = []
-            for (let image of data.pages) {
-                let ext = 'jpg'
-                switch(image.t) {
-                    case 'p':
-                        ext = 'png'
-                        break
-                    case 'g':
-                        ext = 'gif'
-                        break
-                    case 'w':
-                        ext = 'webp'
-                        break
-                }
-                images.push(`https://i3.nhentai.net/galleries/${mediaId}/${images.length + 1}.${ext}`)
-            }
-            return {
-                images: images,
-            }
-            */
+            return { images: [] }
         },
         /**
          * [Optional] load comments
@@ -709,17 +677,17 @@ class Nhentai extends ComicSource {
             comicId = this.normalizeComicId(comicId)
             let res = await Network.get(`${this.apiBaseUrl}/galleries/${comicId}/comments`, {})
             if(res.status !== 200) {
-                throw "Invalid Status Code: " + res.status
+                throw "Invalid status code: " + res.status
             }
             let data = JSON.parse(res.body)
-            let comments = data.map(c => {
+            let comments = (data || []).map(c => {
                 return new Comment({
-                    userName: c.poster.username,
-                    avatar: this.toAbsoluteMediaUrl(c.poster.avatar_url, false),
-                    content: c.body,
-                    time: typeof c.post_date === "number"
+                    userName: c?.poster?.username ?? "",
+                    avatar: this.toAbsoluteMediaUrl(c?.poster?.avatar_url ?? "", false),
+                    content: c?.body ?? "",
+                    time: typeof c?.post_date === "number"
                         ? this.formatTimestamp(c.post_date)
-                        : String(c.post_date),
+                        : String(c?.post_date ?? ""),
                 })
             })
             return {
